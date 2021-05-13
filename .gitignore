@@ -1,0 +1,12 @@
+#Ignore Everything
+#*
+__pycache__/
+apps/__pycache__/
+.ipynb_checkpoints/
+a.pkl
+env/
+
+# Except these files...
+#!IBNR.py
+#!data.sql
+#!Data_Handler.py

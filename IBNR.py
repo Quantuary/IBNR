@@ -5,12 +5,12 @@ Created on Mon Dec 14 22:41:40 2020
 @author: mleong
 """
 import os
-os.chdir(r"R:\Technical\04 Actuarial Pricing\Technical Analytics\travel\notebooks\Marcus's")
+#os.chdir(r"R:\Technical\04 Actuarial Pricing\Technical Analytics\travel\notebooks\Marcus's")
+#os.chdir(r"/home/marcus/Documents/git/IBNR")
+from Data_Handler import Data_Handler 
 
-import cx_Oracle
 import chainladder as cl
 import pandas as pd
-from IPython.display import display
 import numpy as np
 
 
@@ -18,35 +18,7 @@ import numpy as np
 
 
         
-class Data_handler():
-    @classmethod
-    def import_data(cls, script_path):
-        ''' 
-        Importing data into pandas data frame via oracle SQL connection
-        '''
-        password = Data_handler.read_strfile('Password.txt')
-        connection = cx_Oracle.connect("actuary",password,
-                                       cx_Oracle.makedsn("auwphprx-scan.maau.group",
-                                                         1521,
-                                                         "Dwin"))
-        query = Data_handler.read_strfile(script_path)
-        df  = pd.read_sql_query(query, con=connection)
-        df.name = script_path
-        
-        max_date = max(df.ACCOUNTING_MONTH_DATE)
-        min_date = min(df.ACCOUNTING_MONTH_DATE)
-        connection.close()
-        return df, max_date, min_date 
-    
-    @classmethod
-    def read_strfile(cls, path):
-        ''' 
-        Convert text file into a string
-        '''
-        f = open(path, 'r')
-        string = f.read()
-        f.close()
-        return string 
+class Data_Handler(Data_Handler):
     
     @classmethod    
     def pretty_print(cls, date):
@@ -57,9 +29,9 @@ class Data_handler():
         print('%s-%s ' % (date.strftime("%B"), date.strftime('%Y') ))
     
     def __init__(self):
-        (self.data,
-         self.latest_date,
-         self.earliest_date ) = Data_handler.import_data('data.sql')
+        self.data = Data_Handler.import_data('data.sql')
+        self.latest_date = max(self.data.ACCOUNTING_MONTH_DATE)
+        self.earliest_date = min(self.data.ACCOUNTING_MONTH_DATE)
      
     def groupby(self, columns, from_=None, to_=None):
         if from_==None:
@@ -74,18 +46,19 @@ class Data_handler():
 class filter_(object):
 
     
-    def __init__(self, Triangles, product_code=None, claim_category=None, 
-                 claim_category_reserving=None, client_name=None,
-                 product_group=None, product_code_claim=None):
+    def __init__(self, Triangles, product_code_claim=None, claim_category=None, 
+                 claim_category_reserving=None, client_name=None, risk_group=None,
+                 product_group=None, product_code=None):
         
         self.triangle_mD = Triangles
         
-        self.product_code = product_code
+        self.product_code_claim = product_code_claim
         self.claim_category = claim_category
         self.claim_category_reserving = claim_category_reserving
         self.client_name = client_name
-        self.product_group = product_group
-        self.product_code_claim = product_code_claim
+        self.risk_group = risk_group
+        #self.product_group = product_group
+        #self.product_code = product_code
         
         self.triangle_1D = self._filter()
         self.shape = self.triangle_1D.shape
@@ -93,12 +66,13 @@ class filter_(object):
 
     def _filter(self):
         triangle_incremental = self.triangle_mD
-        for (column_name, items) in [('PRODUCT_CODE', self.product_code),
+        for (column_name, items) in [('PRODUCT_CODE_CLAIM', self.product_code_claim),
                                     ('CLAIM_CATEGORY', self.claim_category),
                                     ('CLAIM_CATEGORY_RESERVING', self.claim_category_reserving),
                                     ('CLIENT_NAME', self.client_name),
-                                    ('PRODUCT_GROUP', self.product_group),
-                                    ('PRODUCT_CODE_CLAIM', self.product_code_claim)                          
+                                    ('RISK_GROUP', self.risk_group)
+                                    #('PRODUCT_GROUP', self.product_group),
+                                    #('PRODUCT_CODE', self.product_code)                          
                                     ]:
     
             if items is not None:
@@ -119,26 +93,26 @@ class filter_(object):
         df = self.triangle_1D.dev_to_val().to_frame()
         df = df.iloc[-lookback_period:, -lookback_period:]
         df.name = 'Valuation Triangle'
-        display(IBNR.format_amount(df))
+        return IBNR.format_amount(df)
     
     def incremental_triangle(self, lookback_period=12, development_period=12):
         df = self.triangle_1D.cum_to_incr().to_frame()                          # turn triangle to pandas data frame
         df = df.iloc[-lookback_period:, :development_period]   # cut the period to display
         df.name = 'Incremental Developmenet Triangle'
-        display(IBNR.format_amount(df))
+        return IBNR.format_amount(df)
     
     def cumulative_triangle(self, lookback_period=12, development_period=12):
         df = self.triangle_1D.incr_to_cum().to_frame()
         df = df.iloc[-lookback_period:, :development_period]
         df.name = 'Cumulative Developmenet Triangle'
-        display(IBNR.format_amount(df))
+        return IBNR.format_amount(df)
         
     
     def link_ratio(self, lookback_period=12, development_period=12):
         df = self.triangle_1D.incr_to_cum().link_ratio.to_frame()   #link ratio API must take cumulative triangle
         df = df.iloc[-lookback_period:, :development_period]
         df.name = 'Development Factor'
-        display(IBNR.format_ratio(df))
+        return IBNR.format_ratio(df)
          
 
     def all_ldf_cdf(self, development_period=12):
@@ -169,8 +143,7 @@ class filter_(object):
         cdf = cdf.iloc[:,:development_period]
         cdf.name = 'Cumulative Development Factor'
         
-        display(IBNR.format_table(ldf))
-        display(IBNR.format_table(cdf))
+        return IBNR.format_table(ldf) , IBNR.format_table(cdf)
 
         
 
@@ -192,9 +165,7 @@ class filter_(object):
         df = df.iloc[-lookback_period:, :development_period]
         df.name = 'Selected Development Factor'
         
-        display(IBNR.format_ratio(df))
-        display(IBNR.format_ratio(ldf))
-        display(IBNR.format_ratio(cdf))
+        return IBNR.format_ratio(df), IBNR.format_ratio(ldf), IBNR.format_ratio(cdf)
     
     @classmethod
     def sample_weighted_80_20_6m_12m(cls, triangle_1D):
@@ -248,31 +219,33 @@ class IBNR():
                  '10m-weighted'        : {'n_periods' : 10,'average':'volume'},
                  '11m-weighted'        : {'n_periods' : 11,'average':'volume'},
                  '12m-weighted'        : {'n_periods' : 12,'average':'volume'},
-                 '12m-weighted-drops'  : {'n_periods' : 12,'average':'volume','drop_high':True, 'drop_low':True},
+                 #'12m-weighted-drops'  : {'n_periods' : 12,'average':'volume','drop_high':True, 'drop_low':True},
                  '12m-simple'          : {'n_periods' : 12,'average':'simple'},
        
                  '15m-weighted'        : {'n_periods' : 15,'average':'volume'},
                  '18m-weighted'        : {'n_periods' : 18,'average':'volume'},
                  '24m-weighted'        : {'n_periods' : 24,'average':'volume'},
-                 '24m-weighted-drops'  : {'n_periods' : 24,'average':'volume','drop_high':True, 'drop_low':True},
+                 #'24m-weighted-drops'  : {'n_periods' : 24,'average':'volume','drop_high':True, 'drop_low':True},
                  '24m-simple'          : {'n_periods' : 24,'average':'simple'},
        
                  '36m-weighted'        : {'n_periods' : 36,'average':'volume'},
-                 '36m-weighted-drops'  : {'n_periods' : 36,'average':'volume','drop_high':True, 'drop_low':True},
+                 #'36m-weighted-drops'  : {'n_periods' : 36,'average':'volume','drop_high':True, 'drop_low':True},
                  '36m-simple'          : {'n_periods' : 36,'average':'simple'},
                  'All-weighted'        : {'n_periods' : -1,'average':'volume'},    
                 }
     
     
     def __init__(self):
-        self.Data_handler = Data_handler()
+        self.Data_Handler = Data_Handler()
         '''
         Using the chainladder (cl) package: https://chainladder-python.readthedocs.io/en/latest/index.html
         '''
-        self.Triangles = cl.Triangle(self.Data_handler.data , origin='ACCIDENT_MONTH_DATE', 
+        self.Triangles = cl.Triangle(self.Data_Handler.data , origin='ACCIDENT_MONTH_DATE', 
                                     development='ACCOUNTING_MONTH_DATE', columns='CLAIM_PAID_EX_GST_D',
-                                    index=['PRODUCT_CODE','CLAIM_CATEGORY', 'CLAIM_CATEGORY_RESERVING',
-                                           'CLIENT_NAME', 'PRODUCT_GROUP'],
+                                    index=['PRODUCT_CODE_CLAIM','CLAIM_CATEGORY', 'CLAIM_CATEGORY_RESERVING',
+                                           'CLIENT_NAME', 'RISK_GROUP'
+                                           #'PRODUCT_GROUP'
+                                           ],
                                     cumulative=False
                                     )
         self.filter_ = filter_
